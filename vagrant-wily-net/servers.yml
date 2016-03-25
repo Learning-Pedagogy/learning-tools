@@ -1,0 +1,7 @@
+---
+- name: wily
+  box: slowe/ubuntu-15.10-server-amd64
+  ram: "512"
+  vcpu: "1"
+  nested: false
+  ip_addr: 192.168.100.100

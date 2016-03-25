@@ -1,0 +1,21 @@
+---
+- hosts: "all"
+  sudo: "yes"
+  remote_user: "vagrant"
+
+  vars:
+  - include: servers.yml
+
+  tasks:
+  - name: "Install interface configuration file"
+    template:
+      src: "ifcfg-ens33.j2"
+      dest: "/etc/network/interfaces.d/ifcfg-ens33"
+      owner: "root"
+      group: "root"
+      mode: "0644"
+
+  - name: "Restart network interfaces"
+    service:
+      name: "network"
+      state: "restarted"
