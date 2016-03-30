@@ -3,9 +3,6 @@
   sudo: "yes"
   remote_user: "vagrant"
 
-  vars:
-  - include: servers.yml
-
   tasks:
   - name: "Install interface configuration file"
     template:

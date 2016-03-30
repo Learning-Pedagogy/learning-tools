@@ -4,4 +4,5 @@
   ram: "512"
   vcpu: "1"
   nested: false
+  priv_net: true
   ip_addr: 192.168.100.100

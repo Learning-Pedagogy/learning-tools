@@ -2,7 +2,7 @@
 # vi: set ft=ruby :
 
 # Specify Vagrant version, Vagrant API version, and desired clone location
-Vagrant.require_version '>= 1.6.0'
+Vagrant.require_version '>= 1.8.0'
 VAGRANTFILE_API_VERSION = '2'
 ENV['VAGRANT_DEFAULT_PROVIDER'] = 'vmware_fusion'
 ENV['VAGRANT_VMWARE_CLONE_DIRECTORY'] = '~/.vagrant'
@@ -10,19 +10,9 @@ ENV['VAGRANT_VMWARE_CLONE_DIRECTORY'] = '~/.vagrant'
 
 # Require 'yaml', 'fileutils', and 'erb' modules
 require 'yaml'
-require 'fileutils'
-require 'erb'
 
 # Read YAML file with VM details (box, CPU, and RAM)
-servers = YAML.load_file(File.join(File.dirname(__FILE__), 'servers.yml'))
-
-# Use config from YAML file to write out template for interface configuration
-content = ERB.new File.new(File.join(File.dirname(__FILE__), 'ifcfg-ens33.erb')).read
-
-servers.each do |server|
-  target = File.join(File.dirname(__FILE__), 'ifcfg-ens33')
-  File.open(target, 'w') { |f| f.write(content.result(binding)) }
-end # servers.each
+machines = YAML.load_file(File.join(File.dirname(__FILE__), 'machines.yml'))
 
 # Create and configure the VMs
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
@@ -31,47 +21,46 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.ssh.insert_key = false
 
   # Iterate through entries in YAML file to create VMs
-  servers.each do |server|
-    config.vm.define server['name'] do |srv|
+  machines.each do |machine|
+    config.vm.define machine['name'] do |srv|
 
       # Don't check for box updates
       srv.vm.box_check_update = false
-      srv.vm.hostname = server['name']
-      srv.vm.box = server['box']
+      srv.vm.hostname = machine['name']
+      srv.vm.box = machine['box']
 
       # Configure default synced folder (disable by default)
-      if server['sync_disabled'] != nil
-        srv.vm.synced_folder '.', '/vagrant', disabled: server['sync_disabled']
+      if machine['sync_disabled'] != nil
+        srv.vm.synced_folder '.', '/vagrant', disabled: machine['sync_disabled']
       else
         srv.vm.synced_folder '.', '/vagrant', disabled: true
-      end #if server['sync_disabled']
+      end #if machine['sync_disabled']
 
-      # Assign additional private network
-      if server['ip_addr'] != nil
+      # Assign additional private network if specified in machines.yml
+      if machine['priv_net'] == true
         srv.vm.network 'private_network', auto_config: false
-        srv.vm.provision 'file', source: 'ifcfg-ens33', 
-          destination: '/home/vagrant/ifcfg-ens33'
-        srv.vm.provision 'shell',
-          inline: 'cp /home/vagrant/ifcfg-ens33 /etc/network/interfaces.d/',
-          privileged: true
-        srv.vm.provision 'shell',
-          inline: 'systemctl restart networking', privileged: true
-      end # if server['ip_addr']
+        config.vm.provision 'ansible' do |ansible|
+          ansible.playbook = 'playbook.yml'
+          ansible.host_vars = {
+            'ip_addr' => machine['ip_addr']
+          }
+        end # config.vm.provision
+      end # if machine['priv_net']
 
-      # Configure CPU & RAM per settings in servers.yml (Fusion)
-      srv.vm.provider :vmware_fusion do |vmw|
-        vmw.vmx['memsize'] = server['ram']
-        vmw.vmx['numvcpus'] = server['vcpu']
-        if server['nested'] == true
+      # Configure CPU & RAM per settings in machines.yml (Fusion)
+      srv.vm.provider 'vmware_fusion' do |vmw|
+        vmw.vmx['memsize'] = machine['ram']
+        vmw.vmx['numvcpus'] = machine['vcpu']
+        if machine['nested'] == true
           vmw.vmx['vhv.enable'] = 'TRUE'
-        end #if server['nested']
+        end #if machine['nested']
       end # srv.vm.provider vmware_fusion
 
-      # Configure CPU & RAM per settings in servers.yml (VirtualBox)
-      srv.vm.provider :virtualbox do |vb|
-        vb.memory = server['ram']
-        vb.cpus = server['vcpu']
+      # Configure CPU & RAM per settings in machines.yml (VirtualBox)
+      srv.vm.provider 'virtualbox' do |vb|
+        vb.memory = machine['ram']
+        vb.cpus = machine['vcpu']
       end # srv.vm.provider virtualbox
     end # config.vm.define
-  end # servers.each
+  end # machines.each
 end # Vagrant.configure
